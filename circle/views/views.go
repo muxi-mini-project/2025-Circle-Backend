@@ -9,6 +9,9 @@ func Success(c *gin.Context,message string){
 func Fail(c *gin.Context,message string){
 	c.JSON(400,gin.H{"fail":message})
 }
+func ShowUser(c *gin.Context,user models.User){
+	c.JSON(200,gin.H{"user":user})
+}
 
 
 func Showpractice(c *gin.Context,practices models.Practice){
@@ -26,13 +29,22 @@ func Showid(c *gin.Context,id int){
 		"success":"等待审核",
 	})
 }
-func Selectpractice(c *gin.Context,pracitce []models.Practice){
+func ShowManyPractice(c *gin.Context,pracitce []models.Practice){
 	c.JSON(200,gin.H{"practices":pracitce,})
+}
+func Showuserpractice(c *gin.Context,userpractices models.UserPractice){
+	c.JSON(200,gin.H{"userpractices":userpractices})
+}
+func ShowManyHistoryPractice(c *gin.Context,historypractices []models.Practicehistory){
+	c.JSON(200,gin.H{"historypractices":historypractices})
 }
 
 
 func Showtest(c *gin.Context,test models.Test){
 	c.JSON(200,gin.H{"test":test})
+}
+func ShowManytest(c *gin.Context,tests []models.Test){
+	c.JSON(200,gin.H{"tests":tests})
 }
 func Showtestquestion(c *gin.Context,questions []models.TestQuestion){
 	c.JSON(200,gin.H{"questions":questions})
@@ -45,4 +57,20 @@ func Showtop(c *gin.Context,tops []models.Top){
 }
 func Showtestcomment(c *gin.Context,comments []models.TestComment){
 	c.JSON(200,gin.H{"comments":comments})
+}
+func ShowManyTestid(c *gin.Context,testids []models.Testhistory){
+	c.JSON(200,gin.H{"testids":testids})
+}
+
+
+func ShowCircle(c *gin.Context,circles models.Circle){
+	c.JSON(200,gin.H{"circles":circles})
+}
+func ShowManyCircle(c *gin.Context,circles []models.Circle){
+	c.JSON(200,gin.H{"circles":circles})
+}
+
+
+func ShowSearchHistory(c *gin.Context,search []models.SearchHistory){
+	c.JSON(200,gin.H{"search":search})
 }

@@ -20,6 +20,7 @@ func InitDB() {
 	data, _ := ioutil.ReadFile("data.txt")
 	dns:=string(data)
 	dsn := dns+"?parseTime=true&charset=utf8mb4&loc=Local"
+	
 
 	// 初始化 GORM 数据库实例
 	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
@@ -58,6 +59,9 @@ func InitDB() {
 		&models.TestQuestion{},
 		&models.Testhistory{},
 		&models.Top{},
+		&models.Circle{},
+		&models.FollowCircle{},
+		&models.SearchHistory{},
 	); err != nil {
 		log.Fatalf("自动迁移失败: %v", err)
 	}

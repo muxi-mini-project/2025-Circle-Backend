@@ -1,19 +1,21 @@
 package controllers
 
 import (
+	"circle/dao"
+	"circle/models"
+	"circle/views"
+	"encoding/base64"
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"net/smtp"
+	"strings"
+	"sync"
+	"time"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jordan-wright/email"
-	"net/smtp"
-	"math/rand"
-	"time"
-	"fmt"
-	"sync"
-	"io/ioutil"
-	"strings"
-	"encoding/base64"
-	"circle/views"
-	"circle/models"
-	"circle/database"
 )
 var lock sync.Mutex
 var m=make(map[string]string)
@@ -41,27 +43,21 @@ func Getemail(ee string,VerificationCode string)  {
 	smtpHost := "smtp.qq.com"                                           
 	smtpPort := "587"                                                             
 	auth := smtp.PlainAuth("", "2388287244@qq.com", m, smtpHost)
-	e.Send(smtpHost+":"+smtpPort, auth) 
+	e.Send(smtpHost+":"+smtpPort, auth)  
 }
 func generateVerificationCode() string {
 	rand.Seed(time.Now().UnixNano()) 
 	code := rand.Intn(9000) + 1000   
 	return fmt.Sprintf("%04d", code)
 }
-func Getcode(c *gin.Context){
-	email:=c.PostForm("email")
-	var count int64
-	database.DB.Model(&models.User{}).Where("email =?", email).Count(&count)
-	if count>0{
-		views.Fail(c,"该邮箱已注册")
-		return
-	}
-	code:=generateVerificationCode()
-	Getemail(email,code)
-	lock.Lock()
-	defer lock.Unlock()
-    m[email]=code
-	views.Success(c,"验证码已发送")
+func Getcode(c *gin.Context) {
+    email := c.PostForm("email")
+    code := generateVerificationCode()
+    Getemail(email, code)
+    lock.Lock()
+    defer lock.Unlock()
+    m[email] = code
+    views.Success(c, "验证码已发送")
 }
 func Checkcode(c *gin.Context){
 	email:=c.PostForm("email")
@@ -72,47 +68,53 @@ func Checkcode(c *gin.Context){
 	}
 	views.Success(c,"验证成功")
 }
-func Register(c *gin.Context){
-	email:=c.PostForm("email")
-	password:=c.PostForm("password")
-	var count int64
-	database.DB.Model(&models.User{}).Count(&count)
-	name:="Circle_"+fmt.Sprintf("%04d",count+1)
-	user:=models.User{
-		Email:email,
-		Password:password,
-		Name:name,
-	}
-	database.DB.Create(&user)
-	userpractice:=models.UserPractice{
-		Userid:user.Id,
-		Practicenum:0,
-		Correctnum:0,
-	}
-	database.DB.Create(&userpractice)
-	lock.Lock()
-	defer lock.Unlock()
-    delete(m,email)
-	views.Success(c,"注册成功")
+func Register(c *gin.Context) {
+    email := c.PostForm("email")
+    password := c.PostForm("password")
+    count, err := dao.CountUsersByEmail(email)
+    if err != nil {
+        views.Fail(c, "查询数据库失败")
+        return
+    }
+    if count > 0 {
+        views.Fail(c, "该邮箱已注册")
+        return
+    }
+    totalUsers, err := dao.CountUsersByName("")
+    if err != nil {
+        views.Fail(c, "查询数据库失败")
+        return
+    }
+    name := "Circle_" + fmt.Sprintf("%04d", totalUsers+1)
+    user := models.User{
+        Email:    email,
+        Password: password,
+        Name:     name,
+		Discription: "这里空空如也",
+    }
+    if err := dao.CreateUser(&user); err != nil {
+        views.Fail(c, "创建用户失败")
+        return
+    }
+    views.Success(c, "注册成功")
 }
-func Login(c *gin.Context){
-	email:=c.PostForm("email")
-	password:=c.PostForm("password")
-	var user models.User
-	err:=database.DB.Where("email = ?", email).First(&user).Error
-	if err!=nil{
-		views.Fail(c,"该邮箱未注册")
-		return
-	}
-	if user.Password!=password{
-		views.Fail(c,"密码错误")
-		return
-	}
-	lock.Lock()
-	defer lock.Unlock()
-	token:=Token(user.Name)
-	WhitelistedTokens[token]=1
-	views.Success(c,token)
+func Login(c *gin.Context) {
+    email := c.PostForm("email")
+    password := c.PostForm("password")
+    user, err := dao.GetUserByEmail(email)
+    if err != nil {
+        views.Fail(c, "该邮箱未注册")
+        return
+    }
+    if user.Password != password {
+        views.Fail(c, "密码错误")
+        return
+    }
+    token := Token(user.Name)
+    lock.Lock()
+    WhitelistedTokens[token] = 1
+    lock.Unlock()
+    views.Success(c, token)
 }
 func Logout(c *gin.Context){
 	lock.Lock()
@@ -125,26 +127,17 @@ func Logout(c *gin.Context){
 	delete(WhitelistedTokens,token)
 	views.Success(c,"登出成功")
 }
-func Changepassowrd(c *gin.Context){
-	lock.Lock()
-	defer lock.Unlock()
-	password:=c.PostForm("password")
-	newpassword:=c.PostForm("newpassword")	
+func Changepassowrd(c *gin.Context) {
+    newpassword:=c.PostForm("newpassword")
 	token := c.GetHeader("Authorization")
 	if _,ok:=WhitelistedTokens[token]; !ok {
 		views.Fail(c,"token无效")
 		return
 	}
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?", name).First(&user)
-	if user.Password!=password{
-		views.Fail(c,"原密码错误")
-		return
-	}
+	user, _ := dao.GetUserByName(Username(token))
 	user.Password=newpassword
-	database.DB.Save(&user)
-	views.Success(c,"修改成功")
+	_=dao.UpdateUser(user)
+	views.Success(c,"密码修改成功")
 }
 func Changeusername(c *gin.Context){
 	lock.Lock()
@@ -155,62 +148,117 @@ func Changeusername(c *gin.Context){
 		views.Fail(c,"token无效")
 		return
 	}
-	var count int64
-	database.DB.Model(&models.User{}).Where("name =?", newusername).Count(&count)
+	count,_:=dao.CountUsersByName(newusername)
 	if count>0{
 		views.Fail(c,"该用户名已存在")
 		return
 	}
-	name:=Username(token)
-	var user models.User
-	var practice models.Practice
-	var practicecomment models.PracticeComment
-	var test models.Test
-	database.DB.Where("name = ?", name).First(&user)
-	database.DB.Where("name = ?", name).First(&practice)
-	database.DB.Where("name = ?", name).First(&practicecomment)
-	database.DB.Where("name = ?", name).First(&test)
-	user.Name=newusername
-	practice.Name=newusername
-	practicecomment.Name=newusername
-	test.Name=newusername
-	database.DB.Save(&user)
-	database.DB.Save(&practice)
-	database.DB.Save(&practicecomment)
-	database.DB.Save(&test)
+	name := Username(token)
+	user, err := dao.GetUserByName(name)
+	if err != nil {
+		views.Fail(c, "用户查询失败")
+		return
+	}
+	user.Name = newusername
+	err = dao.UpdateUser(user)
+	if err != nil {
+		views.Fail(c, "用户名更新失败")
+		return
+	}
 	newtoken:=Token(user.Name)
 	WhitelistedTokens[newtoken]=1
 	delete(WhitelistedTokens,token)
 	views.Success(c,newtoken)
 }
-func Setphoto(c *gin.Context){
+func Setphoto(c *gin.Context) {
 	lock.Lock()
 	defer lock.Unlock()
 	token := c.GetHeader("Authorization")
-	if _,ok:=WhitelistedTokens[token]; !ok {
-		views.Fail(c,"token无效")
+	if _, ok := WhitelistedTokens[token]; !ok {
+		views.Fail(c, "token无效")
 		return
 	}
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?", name).First(&user)
-	user.Imageurl=c.PostForm("imageurl")
-	database.DB.Save(&user)
-	views.Success(c,"头像添加成功")
+	name := Username(token)
+	user, err := dao.GetUserByName(name)
+	if err != nil {
+		views.Fail(c, "用户查询失败")
+		return
+	}
+	user.Imageurl = c.PostForm("imageurl")
+	err = dao.UpdateUser(user)
+	if err != nil {
+		views.Fail(c, "头像更新失败")
+		return
+	}
+	views.Success(c, "头像添加成功")
 }
-func Setdiscription(c *gin.Context){
-	discription:=c.PostForm("discription")
+func Setdiscription(c *gin.Context) {
+	discription := c.PostForm("discription")
 	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?", name).First(&user)
-	user.Discription=discription
-	database.DB.Save(&user)
-	views.Success(c,"简介修改成功")
+	name := Username(token)
+	user, err := dao.GetUserByName(name)
+	if err != nil {
+		views.Fail(c, "用户查询失败")
+		return
+	}
+	user.Discription = discription
+	err = dao.UpdateUser(user)
+	if err != nil {
+		views.Fail(c, "简介更新失败")
+		return
+	}
+
+	views.Success(c, "简介修改成功")
 }
-func Getname(c *gin.Context){
-	id:=c.PostForm("id")
-	var user models.User
-	database.DB.Where("id = ?", id).First(&user)
-	views.Success(c,user.Name)
+func Getname(c *gin.Context) {
+	id := c.PostForm("id")
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		views.Fail(c, "无效的用户ID")
+		return
+	}
+	user, err := dao.GetUserByID(userID)
+	if err != nil {
+		views.Fail(c, "用户查询失败")
+		return
+	}
+	views.Success(c, user.Name)
+}
+func Mytest(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	name := Username(token)
+	userid, _ := dao.GetIdByUser(name)
+	test,_:=dao.GetTestByUserid(userid)
+	views.ShowManytest(c,test)
+}
+func Mypractice(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	name := Username(token)
+	userid, _ := dao.GetIdByUser(name)
+	practice,_:=dao.GetPracticeByUserid(userid)
+	views.ShowManyPractice(c,practice)
+}
+func MyDoTest(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	name := Username(token)
+	userid, _ := dao.GetIdByUser(name)
+	test,_:=dao.GetHistoryTestByUserid(userid)
+	views.ShowManyTestid(c,test)
+}
+func MyDoPractice(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	name := Username(token)
+	userid, _ := dao.GetIdByUser(name)
+	practice,_:=dao.GetHistoryPracticeByUserid(userid)
+	views.ShowManyHistoryPractice(c,practice)
+}
+func MyUser(c *gin.Context){
+	token := c.GetHeader("Authorization")
+	name := Username(token)
+	user, err := dao.GetUserByName(name)
+	if err != nil {
+		views.Fail(c, "用户查询失败")
+		return
+	}
+	views.ShowUser(c,*user)
 }

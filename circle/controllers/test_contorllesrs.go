@@ -1,154 +1,206 @@
 package controllers
 
 import (
-	"circle/database"
 	"circle/models"
 	"circle/views"
+	"circle/dao"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
-func timetosecond(t string) int {
-	parts := strings.Split(t, ":")
-	h, _ := strconv.Atoi(parts[0])
-	m, _ := strconv.Atoi(parts[1])
-	s, _ := strconv.Atoi(parts[2])
-	return h*60*60+m*60+s
-}
-func Createtest(c *gin.Context){
+func Createtest(c *gin.Context) {
 	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	discription:=c.PostForm("discription")
-	circle:=c.PostForm("circle")
-	test:=models.Test{
-		Name:name,
-		Discription:discription,
-		Circle:circle,
-		Good:0,
-		Allcomment: 0,
-		Status:"pending", //待审核
+	name := Username(token)
+	discription := c.PostForm("discription")
+	circle := c.PostForm("circle")
+	testname:=c.PostForm("testname")
+	id,_:=dao.GetIdByUser(name)
+	test := models.Test{
+		Userid:       id,
+		Testname: testname,
+		Discription: discription,
+		Circle:     circle,
+		Good:       0,
+		Status:     "approved", // 待审核
 	}
-	database.DB.Create(&test)
-	id:=test.Testid
-	views.Showid(c,id)
+	id, err := dao.CreateTest(&test)
+	if err != nil {
+		views.Fail(c, "创建测试记录失败")
+		return
+	}
+	views.Showid(c, id)
 }
-func Createquestion(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	content:=c.PostForm("content")
-	difficulty:=c.PostForm("difficulty")
-	answer:=c.PostForm("answer")
-	variety:=c.PostForm("variety")
-	imageurl:=c.PostForm("imageurl")
-	question:=models.TestQuestion{
-		Content:content,
-		Testid:p,
+func Createquestion(c *gin.Context) {
+	testid := c.PostForm("testid")
+	p, _ := strconv.Atoi(testid)
+	content := c.PostForm("content")
+	difficulty := c.PostForm("difficulty")
+	answer := c.PostForm("answer")
+	variety := c.PostForm("variety")
+	imageurl := c.PostForm("imageurl")
+	explain:= c.PostForm("explain")
+	question := models.TestQuestion{
+		Content:   content,
+		Testid:    p,
 		Difficulty: difficulty,
-		Answer: answer,
-		Variety: variety,
-		Imageurl: imageurl,
+		Answer:    answer,
+		Variety:   variety,
+		Imageurl:  imageurl,
+		Explain:   explain,
 	}
-	database.DB.Create(&question)
-	id:=question.Questionid
-	views.Showid(c,id)
-}
-func Createtestoption(c *gin.Context){
-    practiceid:=c.PostForm("practiceid")
-	p,_:=strconv.Atoi(practiceid)
-	content:=c.PostForm("content")
-	option:=c.PostForm("option")
-	options:=models.TestOption{
-		Content:content,
-		Practiceid:p,
-		Option:option,
+	id, err := dao.CreateQuestion(&question)
+	if err != nil {
+		views.Fail(c, "创建问题记录失败")
+		return
 	}
-	database.DB.Create(&options)
-	views.Success(c,"等待审核")
+	views.Showid(c, id)
 }
-func Gettest(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	var test models.Test
-	database.DB.Where("testid = ?",p).First(&test)
-	var user models.User
-	database.DB.Where("name = ?",test.Name).First(&user)
-	testhistory:=models.Testhistory{
-		Testid:p,
-		Userid:user.Id,
+func Createtestoption(c *gin.Context) {
+	practiceid := c.PostForm("practiceid")
+	p, _ := strconv.Atoi(practiceid)
+	content := c.PostForm("content")
+	option := c.PostForm("option")
+	options := models.TestOption{
+		Content:   content,
+		Practiceid: p,
+		Option:    option,
 	}
-	database.DB.Create(&testhistory)
-	views.Showtest(c,test)
+	id, err := dao.CreateTestOption(&options)
+	if err != nil {
+		views.Fail(c, "创建测试选项失败")
+		return
+	}
+	views.Showid(c, id)
 }
-func Getquestion(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-    var practices []models.TestQuestion
-	database.DB.Where("testid = ?",p).Find(&practices)
-	views.Showtestquestion(c,practices)
-}
-func Gettestoption(c *gin.Context){
-    practiceid:=c.PostForm("practiceid")
-	p,_:=strconv.Atoi(practiceid)
-	var options []models.TestOption
-	database.DB.Where("practiceid = ?",p).Find(&options)
-	views.Showtestoption(c,options)
-}
-func Getscore(c *gin.Context){
+func Gettest(c *gin.Context) {
+	testid := c.PostForm("testid")
+	p, _ := strconv.Atoi(testid)
+	test, err := dao.GetTestByID(p)
+	if err != nil {
+		views.Fail(c, "获取测试信息失败")
+		return
+	}
 	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?",name).First(&user)
-	testid:=c.PostForm("testid")
-	time:=c.PostForm("time")  //h.m.s
-	second:=timetosecond(time)
-	n:=c.PostForm("correctnum")
-	correctnum,_:=strconv.Atoi(n)	
-	t,_:=strconv.Atoi(testid)
-	feedback:=c.PostForm("feedback")
-	var test models.Test
-	database.DB.Where("testid = ?",testid).First(&test)
-	test.Allcomment+=1
-	if feedback=="good"{
-		test.Good+=1
+	name := Username(token)
+	id,_:=dao.GetIdByUser(name)
+	err = dao.RecordTestHistory(p, id)
+	if err != nil {
+		views.Fail(c, "记录测试历史失败")
+		return
 	}
-	database.DB.Save(&test)
-    top:=models.Top{
-		Userid:user.Id,
-		Correctnum:correctnum,
-		Time:time,
-		Second:second,
-		Testid:t,
+	views.Showtest(c, test)
+}
+func Getquestion(c *gin.Context) {
+	testid := c.PostForm("testid")
+	p, _ := strconv.Atoi(testid)
+	questions, err := dao.GetQuestionsByTestID(p)
+	if err != nil {
+		views.Fail(c, "获取测试题目失败")
+		return
 	}
-	database.DB.Create(&top)
-	views.Success(c,"成功")
+	views.Showtestquestion(c, questions)
 }
-func Showtop(c *gin.Context){
-	testid:=c.PostForm("testid")
-	var tops []models.Top
-	database.DB.Order("correctnum desc , second asc").Where("testid=?",testid).Limit(10).Find(&tops)
-	views.Showtop(c,tops)
+func Gettestoption(c *gin.Context) {
+	practiceid := c.PostForm("practiceid")
+	p, _ := strconv.Atoi(practiceid)
+	options, err := dao.GetTestOptionsByPracticeID(p)
+	if err != nil {
+		views.Fail(c, "获取测试选项失败")
+		return
+	}
+	views.Showtestoption(c, options)
 }
-func Commenttest(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	content:=c.PostForm("content")
+func Getscore(c *gin.Context) {
 	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?",name).Find(&user)
-	comment:=models.TestComment{
-		Content:content,
-		Testid:p,
-		Userid:user.Id,
+	name := Username(token)
+	user, err := dao.GetUserByName(name)
+	if err != nil {
+		views.Fail(c, "获取用户失败")
+		return
 	}
-	database.DB.Create(&comment)
-	views.Success(c,"评论成功")
+	testid := c.PostForm("testid")
+	time := c.PostForm("time")  
+	correctnumStr := c.PostForm("correctnum")
+	correctnum, _ := strconv.Atoi(correctnumStr)
+	testidInt, _ := strconv.Atoi(testid)
+	t,_:=strconv.Atoi(time)
+	top := models.Top{
+		Userid:     user.Id,
+		Correctnum: correctnum,
+		Time:       t,
+		Testid:     testidInt,
+	}
+	err = dao.SaveTopRecord(top)
+	if err != nil {
+		views.Fail(c, "保存成绩失败")
+		return
+	}
+	views.Success(c, "成功")
 }
-func GettestComment(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	var comments []models.TestComment
-	database.DB.Where("testid = ?",p).Find(&comments)
-	views.Showtestcomment(c,comments)
+func Showtop(c *gin.Context) {
+	testid := c.PostForm("testid")
+	tops, err := dao.GetTopByTestID(testid)
+	if err != nil {
+		views.Fail(c, "查询排行榜失败")
+		return
+	}
+	views.Showtop(c, tops)
+}
+func Commenttest(c *gin.Context) {
+	testid := c.PostForm("testid")
+	p, _ := strconv.Atoi(testid)
+	content := c.PostForm("content")
+	token := c.GetHeader("Authorization")
+	name := Username(token)
+	user,_:=dao.GetUserByName(name)
+	comment := models.TestComment{
+		Content: content,
+		Testid:  p,
+		Userid:  user.Id,
+	}
+	if err := dao.CreateTestComment(&comment); err != nil {
+		views.Fail(c, "评论失败")
+		return
+	}
+	views.Success(c, "评论成功")
+}
+func GettestComment(c *gin.Context) {
+	testid := c.PostForm("testid")
+	p, _ := strconv.Atoi(testid)
+	comments, err := dao.GetTestComments(p)
+	if err != nil {
+		views.Fail(c, "获取评论失败")
+		return
+	}
+	views.Showtestcomment(c, comments)
+}
+func Lovetest(c *gin.Context) {
+	testid := c.PostForm("testid")
+	p, _ := strconv.Atoi(testid)
+	test,_:= dao.GetTestByTestID(p)
+	test.Good++
+	_ = dao.UpdateTest(&test)
+	views.Success(c, "点赞成功")
+}
+func RecommentTest(c *gin.Context) {
+	circle:=c.PostForm("circle")
+	test:=dao.RecommentTest(circle)
+	views.ShowManytest(c, test)
+}
+func HotTest(c *gin.Context) {
+	circle:=c.PostForm("circle")
+	test:=dao.HotTest(circle)
+	views.ShowManytest(c, test)
+}
+func NewTest(c *gin.Context) {
+	circle:=c.PostForm("circle")
+	test:=dao.NewTest(circle)
+	views.ShowManytest(c, test)
+}
+func FollowCircleTest(c *gin.Context) {
+	token:=c.GetHeader("Authorization")
+	name:=Username(token)
+	userid,_:=dao.GetIdByUser(name)
+	test:=dao.FollowCircleTest(userid)
+	views.ShowManytest(c, test)
 }
