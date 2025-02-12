@@ -1,264 +1,171 @@
 package controllers
 
 import (
-	"circle/dao"
-	"circle/models"
-	"circle/views"
-	"encoding/base64"
-	"fmt"
-	"io/ioutil"
-	"math/rand"
-	"net/smtp"
-	"strings"
-	"sync"
-	"time"
-	"strconv"
+	"circle/request"
+	"circle/service"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jordan-wright/email"
 )
-var lock sync.Mutex
-var m=make(map[string]string)
-var WhitelistedTokens=make(map[string]int)
-func Token(username string) string {
-    randomBytes := make([]byte, 16)
-    rand.Read(randomBytes)
-    token := base64.URLEncoding.EncodeToString(randomBytes) + "|" + username
-    return token
+type UserControllers struct {
+	us *service.UserServices
 }
-func Username(token string) string {
-	name := strings.Split(token, "|")
-	return name[1]
+func NewUserControllers(us *service.UserServices) *UserControllers {
+	return &UserControllers{
+		us: us,
+	}
 }
-func Getemail(ee string,VerificationCode string)  {
-	data, _ := ioutil.ReadFile("data.txt")
-	m:=string(data)
-	html := "<h1>验证码：" + VerificationCode + "</h1>"
-	e := email.NewEmail()
-	e.From = "luohuixi <2388287244@qq.com>"    
-	e.To = []string{ee}         
-	e.Subject = "验证码"                            
-	e.Text = []byte("This is a plain text body.") 
-	e.HTML = []byte(html)                    
-	smtpHost := "smtp.qq.com"                                           
-	smtpPort := "587"                                                             
-	auth := smtp.PlainAuth("", "2388287244@qq.com", m, smtpHost)
-	e.Send(smtpHost+":"+smtpPort, auth)  
-}
-func generateVerificationCode() string {
-	rand.Seed(time.Now().UnixNano()) 
-	code := rand.Intn(9000) + 1000   
-	return fmt.Sprintf("%04d", code)
-}
-func Getcode(c *gin.Context) {
-    email := c.PostForm("email")
-    code := generateVerificationCode()
-    Getemail(email, code)
-    lock.Lock()
-    defer lock.Unlock()
-    m[email] = code
-    views.Success(c, "验证码已发送")
-}
-func Checkcode(c *gin.Context){
-	email:=c.PostForm("email")
-	code:=c.PostForm("code")
-	if m[email]!=code{
-		views.Fail(c,"验证码错误")
+func (uc *UserControllers) Getcode(c *gin.Context) {
+    var email request.Email
+	if err := c.ShouldBindJSON(&email); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Success(c,"验证成功")
+	uc.us.Getcode(email)
+	c.JSON(200, gin.H{"success": "验证码已发送"})
 }
-func Register(c *gin.Context) {
-    email := c.PostForm("email")
-    password := c.PostForm("password")
-    count, err := dao.CountUsersByEmail(email)
-    if err != nil {
-        views.Fail(c, "查询数据库失败")
-        return
-    }
-    if count > 0 {
-        views.Fail(c, "该邮箱已注册")
-        return
-    }
-    totalUsers, err := dao.CountUsersByName("")
-    if err != nil {
-        views.Fail(c, "查询数据库失败")
-        return
-    }
-    name := "Circle_" + fmt.Sprintf("%04d", totalUsers+1)
-    user := models.User{
-        Email:    email,
-        Password: password,
-        Name:     name,
-		Discription: "这里空空如也",
-    }
-    if err := dao.CreateUser(&user); err != nil {
-        views.Fail(c, "创建用户失败")
-        return
-    }
-    views.Success(c, "注册成功")
+func (uc *UserControllers) Checkcode(c *gin.Context){
+	var email request.Email
+	if err := c.ShouldBindJSON(&email); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	ok:=uc.us.Checkcode(email)
+	if !ok{
+		c.JSON(400, gin.H{"error": "验证码错误"})
+		return
+	}
+	c.JSON(200, gin.H{"success": "验证码正确"})
 }
-func Login(c *gin.Context) {
-    email := c.PostForm("email")
-    password := c.PostForm("password")
-    user, err := dao.GetUserByEmail(email)
-    if err != nil {
-        views.Fail(c, "该邮箱未注册")
-        return
-    }
-    if user.Password != password {
-        views.Fail(c, "密码错误")
-        return
-    }
-    token := Token(user.Name)
-    lock.Lock()
-    WhitelistedTokens[token] = 1
-    lock.Unlock()
-    views.Success(c, token)
+func (uc *UserControllers) Register(c *gin.Context) {
+    var user request.User
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	message,ok:=uc.us.Register(user) 
+    if !ok {
+		c.JSON(400, gin.H{"error": message})
+		return
+	}
+    c.JSON(200, gin.H{"success": message})
 }
-func Logout(c *gin.Context){
-	lock.Lock()
-	defer lock.Unlock()
-	token := c.GetHeader("Authorization")
-	if _,ok:=WhitelistedTokens[token];!ok {
-		views.Fail(c,"token无效")
+func (uc *UserControllers) Login(c *gin.Context) {
+    var user request.User
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	delete(WhitelistedTokens,token)
-	views.Success(c,"登出成功")
+	message,ok:=uc.us.Login(user)
+    if !ok {
+		c.JSON(400, gin.H{"error": message})
+		return
+	}
+    c.JSON(200, gin.H{"success": message})
 }
-func Changepassowrd(c *gin.Context) {
-    newpassword:=c.PostForm("newpassword")
-	token := c.GetHeader("Authorization")
-	if _,ok:=WhitelistedTokens[token]; !ok {
-		views.Fail(c,"token无效")
-		return
-	}
-	user, _ := dao.GetUserByName(Username(token))
-	user.Password=newpassword
-	_=dao.UpdateUser(user)
-	views.Success(c,"密码修改成功")
+func (uc *UserControllers) Logout(c *gin.Context){
+	//uc.us.Logout(token)
+	c.JSON(200, gin.H{"success": "登出成功"})
 }
-func Changeusername(c *gin.Context){
-	lock.Lock()
-	defer lock.Unlock()
-	newusername:=c.PostForm("newusername")
-	token := c.GetHeader("Authorization")
-	if _,ok:=WhitelistedTokens[token]; !ok {
-		views.Fail(c,"token无效")
+func (uc *UserControllers) Changepassowrd(c *gin.Context) {
+    var newpassword request.Newpassword
+	if err := c.ShouldBindJSON(&newpassword); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	count,_:=dao.CountUsersByName(newusername)
-	if count>0{
-		views.Fail(c,"该用户名已存在")
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message,ok:=uc.us.Changepassword(newpassword,n)
+	if !ok {
+		c.JSON(400, gin.H{"error": message})
 		return
 	}
-	name := Username(token)
-	user, err := dao.GetUserByName(name)
-	if err != nil {
-		views.Fail(c, "用户查询失败")
-		return
-	}
-	user.Name = newusername
-	err = dao.UpdateUser(user)
-	if err != nil {
-		views.Fail(c, "用户名更新失败")
-		return
-	}
-	newtoken:=Token(user.Name)
-	WhitelistedTokens[newtoken]=1
-	delete(WhitelistedTokens,token)
-	views.Success(c,newtoken)
+	c.JSON(200, gin.H{"success": message})
 }
-func Setphoto(c *gin.Context) {
-	lock.Lock()
-	defer lock.Unlock()
-	token := c.GetHeader("Authorization")
-	if _, ok := WhitelistedTokens[token]; !ok {
-		views.Fail(c, "token无效")
+func (uc *UserControllers) Changeusername(c *gin.Context){
+	var newusername request.Newusername
+	if err := c.ShouldBindJSON(&newusername); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	name := Username(token)
-	user, err := dao.GetUserByName(name)
-	if err != nil {
-		views.Fail(c, "用户查询失败")
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+    message,ok:=uc.us.Changeusername(newusername,n)
+	if !ok {
+		c.JSON(400, gin.H{"error": message})
 		return
 	}
-	user.Imageurl = c.PostForm("imageurl")
-	err = dao.UpdateUser(user)
-	if err != nil {
-		views.Fail(c, "头像更新失败")
-		return
-	}
-	views.Success(c, "头像添加成功")
+	c.JSON(200, gin.H{"success": message})
 }
-func Setdiscription(c *gin.Context) {
-	discription := c.PostForm("discription")
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	user, err := dao.GetUserByName(name)
-	if err != nil {
-		views.Fail(c, "用户查询失败")
+func (uc *UserControllers) Setphoto(c *gin.Context) {
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	var imageurl request.Imageurl
+	if err := c.ShouldBindJSON(&imageurl); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	user.Discription = discription
-	err = dao.UpdateUser(user)
-	if err != nil {
-		views.Fail(c, "简介更新失败")
+	message,ok:=uc.us.Setphoto(n, imageurl.Imageurl)
+	if !ok {
+		c.JSON(400, gin.H{"error": message})
 		return
 	}
-
-	views.Success(c, "简介修改成功")
+	c.JSON(200, gin.H{"success": message})
 }
-func Getname(c *gin.Context) {
-	id := c.PostForm("id")
-	userID, err := strconv.Atoi(id)
-	if err != nil {
-		views.Fail(c, "无效的用户ID")
+func (uc *UserControllers) Setdiscription(c *gin.Context) {
+	var discription request.Discription
+	if err := c.ShouldBindJSON(&discription); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	user, err := dao.GetUserByID(userID)
-	if err != nil {
-		views.Fail(c, "用户查询失败")
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message,ok:=uc.us.Setdiscription(n, discription.Discription)
+	if !ok {
+		c.JSON(400, gin.H{"error": message})
 		return
 	}
-	views.Success(c, user.Name)
+	c.JSON(200, gin.H{"success": message})
 }
-func Mytest(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	userid, _ := dao.GetIdByUser(name)
-	test,_:=dao.GetTestByUserid(userid)
-	views.ShowManytest(c,test)
-}
-func Mypractice(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	userid, _ := dao.GetIdByUser(name)
-	practice,_:=dao.GetPracticeByUserid(userid)
-	views.ShowManyPractice(c,practice)
-}
-func MyDoTest(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	userid, _ := dao.GetIdByUser(name)
-	test,_:=dao.GetHistoryTestByUserid(userid)
-	views.ShowManyTestid(c,test)
-}
-func MyDoPractice(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	userid, _ := dao.GetIdByUser(name)
-	practice,_:=dao.GetHistoryPracticeByUserid(userid)
-	views.ShowManyHistoryPractice(c,practice)
-}
-func MyUser(c *gin.Context){
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	user, err := dao.GetUserByName(name)
-	if err != nil {
-		views.Fail(c, "用户查询失败")
+func (uc *UserControllers) Getname(c *gin.Context) {
+	var id request.Userid
+	if err := c.ShouldBindJSON(&id); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.ShowUser(c,*user)
+	message,ok:=uc.us.Getname(id)
+	if !ok{
+		c.JSON(400, gin.H{"error": message})
+		return 
+	}
+	c.JSON(200, gin.H{"success": message})
+}
+func (uc *UserControllers) Mytest(c *gin.Context) {
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	test:=uc.us.Mytest(n)
+    c.JSON(200, gin.H{"success": test})
+}
+func (uc *UserControllers) Mypractice(c *gin.Context) {
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	practice:=uc.us.Mypractice(n)
+	c.JSON(200, gin.H{"success": practice})
+}
+func (uc *UserControllers) MyDoTest(c *gin.Context) {
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	test:=uc.us.MyDoTest(n)
+	c.JSON(200, gin.H{"success": test})
+}
+func (uc *UserControllers) MyDoPractice(c *gin.Context) {
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	practice:=uc.us.MyDoPractice(n)
+	c.JSON(200, gin.H{"success": practice})
+}
+func (uc *UserControllers) MyUser(c *gin.Context){
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	user:=uc.us.MyUser(n)
+	c.JSON(200, gin.H{"success": user})
 }

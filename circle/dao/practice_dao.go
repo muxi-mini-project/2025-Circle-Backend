@@ -6,22 +6,28 @@ import (
 	"fmt"
 	"gorm.io/gorm"
 )
+type PracticeDao struct {
+	db *gorm.DB
+}
+func NewPracticeDao(db *gorm.DB) *PracticeDao {
+	return &PracticeDao{db: db}
+}
 
-func CreatePractice(practice *models.Practice) error {
+func (ud *PracticeDao) CreatePractice(practice *models.Practice) error {
 	err := database.DB.Create(practice).Error
 	if err != nil {
 		return fmt.Errorf("创建 practice 失败: %w", err)
 	}
 	return nil
 }
-func CreatePracticeOption(option *models.PracticeOption) error {
+func (ud *PracticeDao) CreatePracticeOption(option *models.PracticeOption) error {
 	err := database.DB.Create(option).Error
 	if err != nil {
 		return fmt.Errorf("创建 PracticeOption 失败: %w", err)
 	}
 	return nil
 }
-func GetPracticeByCircle(circle string) (models.Practice, error) {
+func (ud *PracticeDao) GetPracticeByCircle(circle string) (models.Practice, error) {
 	var practice models.Practice
 	err := database.DB.Where("status = ?", "approved").
 		Where("circle = ?", circle).
@@ -32,7 +38,7 @@ func GetPracticeByCircle(circle string) (models.Practice, error) {
 	}
 	return practice, nil
 }
-func GetPracticeOptionsByPracticeID(practiceid int) ([]models.PracticeOption, error) {
+func (ud *PracticeDao) GetPracticeOptionsByPracticeID(practiceid int) ([]models.PracticeOption, error) {
 	var options []models.PracticeOption
 	err := database.DB.Where("practiceid = ?", practiceid).Find(&options).Error
 	if err != nil {
@@ -40,14 +46,14 @@ func GetPracticeOptionsByPracticeID(practiceid int) ([]models.PracticeOption, er
 	}
 	return options, nil
 }
-func CreatePracticeComment(comment *models.PracticeComment) error {
+func (ud *PracticeDao) CreatePracticeComment(comment *models.PracticeComment) error {
 	err := database.DB.Create(comment).Error
 	if err != nil {
 		return fmt.Errorf("创建 PracticeComment 失败: %w", err)
 	}
 	return nil
 }
-func GetPracticeCommentsByPracticeID(practiceid int) ([]models.PracticeComment, error) {
+func (ud *PracticeDao) GetPracticeCommentsByPracticeID(practiceid int) ([]models.PracticeComment, error) {
 	var comments []models.PracticeComment
 	err := database.DB.Where("practiceid = ?", practiceid).Find(&comments).Error
 	if err != nil {
@@ -55,7 +61,7 @@ func GetPracticeCommentsByPracticeID(practiceid int) ([]models.PracticeComment, 
 	}
 	return comments, nil
 }
-func GetUserByUsername(username string) (*models.User, error) {
+func (ud *PracticeDao) GetUserByUsername(username string) (*models.User, error) {
 	var user models.User
 	err := database.DB.Where("name = ?", username).First(&user).Error
 	if err != nil {
@@ -63,7 +69,7 @@ func GetUserByUsername(username string) (*models.User, error) {
 	}
 	return &user, nil
 }
-func GetUserPracticeByUserID(userID int,circle string) (*models.UserPractice, error) {
+func (ud *PracticeDao) GetUserPracticeByUserID(userID int,circle string) (*models.UserPractice, error) {
 	var userpractice models.UserPractice
 	err := database.DB.Where("userid = ?", userID).Where("circle = ?", circle).First(&userpractice).Error
 	if err == gorm.ErrRecordNotFound {
@@ -78,21 +84,21 @@ func GetUserPracticeByUserID(userID int,circle string) (*models.UserPractice, er
 	}
 	return &userpractice, nil
 }
-func UpdateUserPractice(userpractice *models.UserPractice) error {
+func (ud *PracticeDao) UpdateUserPractice(userpractice *models.UserPractice) error {
 	err := database.DB.Save(userpractice).Error
 	if err != nil {
 		return fmt.Errorf("更新用户练习记录失败: %w", err)
 	}
 	return nil
 }
-func CreatePracticeHistory(history *models.Practicehistory) error {
+func (ud *PracticeDao) CreatePracticeHistory(history *models.Practicehistory) error {
 	err := database.DB.Create(history).Error
 	if err != nil {
 		return fmt.Errorf("创建练习历史失败: %w", err)
 	}
 	return nil
 }
-func GetApprovedPracticesByCircle(circle string) ([]models.Practice, error) {
+func (ud *PracticeDao) GetApprovedPracticesByCircle(circle string) ([]models.Practice, error) {
 	var practices []models.Practice
 	err := database.DB.Where("status = ?", "approved").Where("circle = ?", circle).Limit(5).Find(&practices).Error
 	if err != nil {
@@ -100,7 +106,7 @@ func GetApprovedPracticesByCircle(circle string) ([]models.Practice, error) {
 	}
 	return practices, nil
 }
-func Showrank(id int,circle string) int {
+func (ud *PracticeDao) Showrank(id int,circle string) int {
 	var userPractices []models.UserPractice
     database.DB.Where("circle = ?", circle).
 	   Order("CAST(correctnum AS float) / CAST(practicenum AS float) DESC").
@@ -116,15 +122,20 @@ func Showrank(id int,circle string) int {
     }
     return rank
 }
-func GetPracticeByPracticeID(practiceid int) (models.Practice) {
+func (ud *PracticeDao) GetPracticeByPracticeID(practiceid int) (models.Practice) {
 	var practice models.Practice
 	_ = database.DB.Where("practiceid = ?", practiceid).First(&practice)
 	return practice
 }
-func UpdatePractice(practice *models.Practice) error {
+func (ud *PracticeDao) UpdatePractice(practice *models.Practice) error {
 	err := database.DB.Save(practice).Error
 	if err != nil {
 		return fmt.Errorf("更新练习记录失败: %w", err)
 	}
 	return nil
+}
+func (ud *PracticeDao) GetIdByUser(name string) (int, error) {
+	var id int
+	err := database.DB.Model(&models.User{}).Where("name = ?", name).Select("id").First(&id).Error
+	return id, err
 }

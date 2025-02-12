@@ -4,30 +4,37 @@ import (
 	"circle/models"
 	"circle/database"
 	"fmt"
+	"gorm.io/gorm"
 )
+type TestDao struct {
+	db *gorm.DB
+}
+func NewTestDao(db *gorm.DB) *TestDao {
+	return &TestDao{db: db}
+}
 
-func CreateTest(test *models.Test) (int, error) {
+func (ud *TestDao) CreateTest(test *models.Test) (int, error) {
 	err := database.DB.Create(test).Error
 	if err != nil {
 		return 0, fmt.Errorf("创建测试记录失败: %w", err)
 	}
 	return test.Testid, nil
 }
-func CreateQuestion(question *models.TestQuestion) (int, error) {
+func (ud *TestDao) CreateQuestion(question *models.TestQuestion) (int, error) {
 	err := database.DB.Create(question).Error
 	if err != nil {
 		return 0, fmt.Errorf("创建问题记录失败: %w", err)
 	}
 	return question.Questionid, nil
 }
-func CreateTestOption(option *models.TestOption) (int, error) {
+func (ud *TestDao) CreateTestOption(option *models.TestOption) (int, error) {
 	err := database.DB.Create(option).Error
 	if err != nil {
 		return 0, fmt.Errorf("创建测试选项记录失败: %w", err)
 	}
 	return option.Optionid, nil
 }
-func GetTestByID(testid int) (models.Test, error) {
+func (ud *TestDao) GetTestByID(testid int) (models.Test, error) {
 	var test models.Test
 	err := database.DB.Where("testid = ?", testid).First(&test).Error
 	if err != nil {
@@ -35,7 +42,7 @@ func GetTestByID(testid int) (models.Test, error) {
 	}
 	return test, nil
 }
-func RecordTestHistory(testid int, userId int) error {
+func (ud *TestDao) RecordTestHistory(testid int, userId int) error {
 	testHistory := models.Testhistory{
 		Testid: testid,
 		Userid: userId,
@@ -46,7 +53,7 @@ func RecordTestHistory(testid int, userId int) error {
 	}
 	return nil
 }
-func GetQuestionsByTestID(testid int) ([]models.TestQuestion, error) {
+func (ud *TestDao) GetQuestionsByTestID(testid int) ([]models.TestQuestion, error) {
 	var questions []models.TestQuestion
 	err := database.DB.Where("testid = ?", testid).Find(&questions).Error
 	if err != nil {
@@ -54,7 +61,7 @@ func GetQuestionsByTestID(testid int) ([]models.TestQuestion, error) {
 	}
 	return questions, nil
 }
-func GetTestOptionsByPracticeID(practiceid int) ([]models.TestOption, error) {
+func (ud *TestDao) GetTestOptionsByPracticeID(practiceid int) ([]models.TestOption, error) {
 	var options []models.TestOption
 	err := database.DB.Where("practiceid = ?", practiceid).Find(&options).Error
 	if err != nil {
@@ -62,14 +69,14 @@ func GetTestOptionsByPracticeID(practiceid int) ([]models.TestOption, error) {
 	}
 	return options, nil
 }
-func SaveTopRecord(top models.Top) error {
+func (ud *TestDao) SaveTopRecord(top models.Top) error {
 	err := database.DB.Create(&top).Error
 	if err != nil {
 		return fmt.Errorf("保存成绩记录失败: %w", err)
 	}
 	return nil
 }
-func GetTopByTestID(testid string) ([]models.Top, error) {
+func (ud *TestDao) GetTopByTestID(testid int) ([]models.Top, error) {
 	var tops []models.Top
 	err := database.DB.Order("correctnum desc, time asc").
 		Where("testid = ?", testid).
@@ -77,17 +84,17 @@ func GetTopByTestID(testid string) ([]models.Top, error) {
 		Find(&tops).Error
 	return tops, err
 }
-func CreateTestComment(comment *models.TestComment) error {
+func (ud *TestDao) CreateTestComment(comment *models.TestComment) error {
 	return database.DB.Create(comment).Error
 }
-func GetTestComments(testid int) ([]models.TestComment, error) {
+func (ud *TestDao) GetTestComments(testid int) ([]models.TestComment, error) {
 	var comments []models.TestComment
 	if err := database.DB.Where("testid = ?", testid).Find(&comments).Error; err != nil {
 		return nil, err
 	}
 	return comments, nil
 }
-func GetTestByTestID(testid int) (models.Test,error){
+func (ud *TestDao) GetTestByTestID(testid int) (models.Test,error){
 	var test models.Test
 	err := database.DB.Where("testid = ?", testid).First(&test).Error
 	if err != nil {
@@ -95,10 +102,10 @@ func GetTestByTestID(testid int) (models.Test,error){
 	}
 	return test, nil
 }
-func UpdateTest(test *models.Test) error {
+func (ud *TestDao) UpdateTest(test *models.Test) error {
 	return database.DB.Save(test).Error
 }
-func RecommentTest(circle string) ([]models.Test){
+func (ud *TestDao) RecommentTest(circle string) ([]models.Test){
     var test []models.Test
 	if circle=="" {
 		_= database.DB.Order("RAND()").Limit(10).Find(&test).Error
@@ -107,7 +114,7 @@ func RecommentTest(circle string) ([]models.Test){
 	}
 	return test
 }
-func HotTest(circle string) ([]models.Test){
+func (ud *TestDao) HotTest(circle string) ([]models.Test){
 	var test []models.Test
 	if circle=="" {
 		_= database.DB.Order("good desc").Limit(10).Find(&test).Error
@@ -116,7 +123,7 @@ func HotTest(circle string) ([]models.Test){
 	}
 	return test
 }
-func NewTest(circle string) ([]models.Test){
+func (ud *TestDao) NewTest(circle string) ([]models.Test){
 	var test []models.Test
 	if circle=="" {
 		_= database.DB.Order("createtime desc").Limit(10).Find(&test).Error
@@ -125,7 +132,7 @@ func NewTest(circle string) ([]models.Test){
 	}
 	return test
 }
-func FollowCircleTest(userid int) ([]models.Test){
+func (ud *TestDao) FollowCircleTest(userid int) ([]models.Test){
 	var test []models.Test
 	var circleid []int
 	var circlename []string
@@ -133,4 +140,15 @@ func FollowCircleTest(userid int) ([]models.Test){
 	_= database.DB.Model(&models.Circle{}).Where("id in (?)", circleid).Pluck("name", &circlename).Error
 	_= database.DB.Where("circle in (?)", circlename).Order("RAND()").Limit(10).Find(&test).Error  //in表示查询多个数据
 	return test
+}
+func (ud *TestDao) GetIdByUser(name string) (int, error) {
+	var id int
+	err := database.DB.Model(&models.User{}).Where("name = ?", name).Select("id").First(&id).Error
+	return id, err
+}
+
+func (ud *TestDao) GetUserByName(name string) (*models.User, error) {
+	var user models.User
+	err := database.DB.Where("name = ?", name).First(&user).Error
+	return &user, err
 }

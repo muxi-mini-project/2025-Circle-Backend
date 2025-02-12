@@ -1,6 +1,6 @@
 ## 我的服务器：112.126.68.22:8080/…
 
-## 除了前三个都要加请求头：”Authorization“(存储token)
+## 除了前四个都要加请求头：”Authorization“(存储token)
 
 # 用户 /user/…
 

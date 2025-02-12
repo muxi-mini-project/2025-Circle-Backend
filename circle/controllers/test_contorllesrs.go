@@ -1,206 +1,177 @@
 package controllers
 
 import (
-	"circle/models"
-	"circle/views"
-	"circle/dao"
-	"strconv"
+	"circle/request"
+	"circle/service"
 
 	"github.com/gin-gonic/gin"
 )
-func Createtest(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	discription := c.PostForm("discription")
-	circle := c.PostForm("circle")
-	testname:=c.PostForm("testname")
-	id,_:=dao.GetIdByUser(name)
-	test := models.Test{
-		Userid:       id,
-		Testname: testname,
-		Discription: discription,
-		Circle:     circle,
-		Good:       0,
-		Status:     "approved", // 待审核
+type TestControllers struct {
+	us *service.TestServices
+}
+func NewTestControllers(us *service.TestServices) *TestControllers {
+	return &TestControllers{
+		us: us,
 	}
-	id, err := dao.CreateTest(&test)
-	if err != nil {
-		views.Fail(c, "创建测试记录失败")
+}
+func (uc *TestControllers) Createtest(c *gin.Context) {
+	var get request.Test
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Showid(c, id)
-}
-func Createquestion(c *gin.Context) {
-	testid := c.PostForm("testid")
-	p, _ := strconv.Atoi(testid)
-	content := c.PostForm("content")
-	difficulty := c.PostForm("difficulty")
-	answer := c.PostForm("answer")
-	variety := c.PostForm("variety")
-	imageurl := c.PostForm("imageurl")
-	explain:= c.PostForm("explain")
-	question := models.TestQuestion{
-		Content:   content,
-		Testid:    p,
-		Difficulty: difficulty,
-		Answer:    answer,
-		Variety:   variety,
-		Imageurl:  imageurl,
-		Explain:   explain,
-	}
-	id, err := dao.CreateQuestion(&question)
-	if err != nil {
-		views.Fail(c, "创建问题记录失败")
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	id:= uc.us.CreateTest(n, get)
+	if id==-1 {
+		c.JSON(400, gin.H{"error": "创建测试失败"})
 		return
 	}
-	views.Showid(c, id)
+	c.JSON(200, gin.H{
+		"id": id,
+	    "message": "等待审核",
+	})
 }
-func Createtestoption(c *gin.Context) {
-	practiceid := c.PostForm("practiceid")
-	p, _ := strconv.Atoi(practiceid)
-	content := c.PostForm("content")
-	option := c.PostForm("option")
-	options := models.TestOption{
-		Content:   content,
-		Practiceid: p,
-		Option:    option,
-	}
-	id, err := dao.CreateTestOption(&options)
-	if err != nil {
-		views.Fail(c, "创建测试选项失败")
+func (uc *TestControllers) Createquestion(c *gin.Context) {
+	var get request.TestQuestion
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Showid(c, id)
-}
-func Gettest(c *gin.Context) {
-	testid := c.PostForm("testid")
-	p, _ := strconv.Atoi(testid)
-	test, err := dao.GetTestByID(p)
-	if err != nil {
-		views.Fail(c, "获取测试信息失败")
+	id:= uc.us.Createquestion(get)
+	if id==-1 {
+		c.JSON(400, gin.H{"error": "创建测试题目失败"})
 		return
 	}
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	id,_:=dao.GetIdByUser(name)
-	err = dao.RecordTestHistory(p, id)
-	if err != nil {
-		views.Fail(c, "记录测试历史失败")
+	c.JSON(200, gin.H{
+		"id": id,
+		"success": "等待审核",
+	})
+}
+func (uc *TestControllers) Createtestoption(c *gin.Context) {
+	var get request.Option
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Showtest(c, test)
-}
-func Getquestion(c *gin.Context) {
-	testid := c.PostForm("testid")
-	p, _ := strconv.Atoi(testid)
-	questions, err := dao.GetQuestionsByTestID(p)
-	if err != nil {
-		views.Fail(c, "获取测试题目失败")
+	id:= uc.us.Createtestoption(get)
+	if id==-1 {
+		c.JSON(400, gin.H{"error": "创建测试题目失败"})
 		return
 	}
-	views.Showtestquestion(c, questions)
+	c.JSON(200, gin.H{
+		"id": id,
+		"success": "等待审核",
+	})
 }
-func Gettestoption(c *gin.Context) {
-	practiceid := c.PostForm("practiceid")
-	p, _ := strconv.Atoi(practiceid)
-	options, err := dao.GetTestOptionsByPracticeID(p)
-	if err != nil {
-		views.Fail(c, "获取测试选项失败")
+func (uc *TestControllers) Gettest(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Showtestoption(c, options)
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	test:= uc.us.Gettest(n, get)
+	c.JSON(200, gin.H{"test": test})
 }
-func Getscore(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	user, err := dao.GetUserByName(name)
-	if err != nil {
-		views.Fail(c, "获取用户失败")
+func (uc *TestControllers) Getquestion(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	testid := c.PostForm("testid")
-	time := c.PostForm("time")  
-	correctnumStr := c.PostForm("correctnum")
-	correctnum, _ := strconv.Atoi(correctnumStr)
-	testidInt, _ := strconv.Atoi(testid)
-	t,_:=strconv.Atoi(time)
-	top := models.Top{
-		Userid:     user.Id,
-		Correctnum: correctnum,
-		Time:       t,
-		Testid:     testidInt,
-	}
-	err = dao.SaveTopRecord(top)
-	if err != nil {
-		views.Fail(c, "保存成绩失败")
+	question:= uc.us.Getquestion(get)
+	c.JSON(200, gin.H{"question": question})
+}
+func (uc *TestControllers) Gettestoption(c *gin.Context) {
+	var get request.GetPractice
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Success(c, "成功")
+	option:= uc.us.Gettestoption(get)
+	c.JSON(200, gin.H{"option": option})
 }
-func Showtop(c *gin.Context) {
-	testid := c.PostForm("testid")
-	tops, err := dao.GetTopByTestID(testid)
-	if err != nil {
-		views.Fail(c, "查询排行榜失败")
+func (uc *TestControllers) Getscore(c *gin.Context) {
+	var get request.Score
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Showtop(c, tops)
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message:= uc.us.Getscore(n, get)
+	c.JSON(200, gin.H{"message": message})
 }
-func Commenttest(c *gin.Context) {
-	testid := c.PostForm("testid")
-	p, _ := strconv.Atoi(testid)
-	content := c.PostForm("content")
-	token := c.GetHeader("Authorization")
-	name := Username(token)
-	user,_:=dao.GetUserByName(name)
-	comment := models.TestComment{
-		Content: content,
-		Testid:  p,
-		Userid:  user.Id,
-	}
-	if err := dao.CreateTestComment(&comment); err != nil {
-		views.Fail(c, "评论失败")
+func (uc *TestControllers) Showtop(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Success(c, "评论成功")
+	top:= uc.us.Showtop(get)
+	c.JSON(200, gin.H{"top": top})
 }
-func GettestComment(c *gin.Context) {
-	testid := c.PostForm("testid")
-	p, _ := strconv.Atoi(testid)
-	comments, err := dao.GetTestComments(p)
-	if err != nil {
-		views.Fail(c, "获取评论失败")
+func (uc *TestControllers) Commenttest(c *gin.Context) {
+	var get request.Commenttest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
 		return
 	}
-	views.Showtestcomment(c, comments)
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message:= uc.us.Commenttest(n, get)
+	c.JSON(200, gin.H{"message": message})
 }
-func Lovetest(c *gin.Context) {
-	testid := c.PostForm("testid")
-	p, _ := strconv.Atoi(testid)
-	test,_:= dao.GetTestByTestID(p)
-	test.Good++
-	_ = dao.UpdateTest(&test)
-	views.Success(c, "点赞成功")
+func (uc *TestControllers) GettestComment(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	comment:= uc.us.Gettestcomment(get)
+	c.JSON(200, gin.H{"comment": comment})
 }
-func RecommentTest(c *gin.Context) {
-	circle:=c.PostForm("circle")
-	test:=dao.RecommentTest(circle)
-	views.ShowManytest(c, test)
+func (uc *TestControllers) Lovetest(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	message:= uc.us.Lovetest(get)
+	c.JSON(200, gin.H{"message": message})
 }
-func HotTest(c *gin.Context) {
-	circle:=c.PostForm("circle")
-	test:=dao.HotTest(circle)
-	views.ShowManytest(c, test)
+func (uc *TestControllers) RecommentTest(c *gin.Context) {
+	var get request.GetCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	test:=uc.us.RecommentTest(get)
+	c.JSON(200, gin.H{"test": test})
 }
-func NewTest(c *gin.Context) {
-	circle:=c.PostForm("circle")
-	test:=dao.NewTest(circle)
-	views.ShowManytest(c, test)
+func (uc *TestControllers) HotTest(c *gin.Context) {
+	var get request.GetCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	test:=uc.us.HotTest(get)
+	c.JSON(200, gin.H{"test": test})
 }
-func FollowCircleTest(c *gin.Context) {
-	token:=c.GetHeader("Authorization")
-	name:=Username(token)
-	userid,_:=dao.GetIdByUser(name)
-	test:=dao.FollowCircleTest(userid)
-	views.ShowManytest(c, test)
+func (uc *TestControllers) NewTest(c *gin.Context) {
+	var get request.GetCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	test:=uc.us.NewTest(get)
+	c.JSON(200, gin.H{"test": test})
+}
+func (uc *TestControllers) FollowCircleTest(c *gin.Context) {
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	test:=uc.us.FollowCircleTest(n)
+	c.JSON(200, gin.H{"test": test})
 }

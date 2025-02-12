@@ -1,74 +1,71 @@
 package controllers
 
 import (
-	"circle/dao"
-	"circle/models"
-	"circle/views"
-	"strconv"
+	"circle/request"
+	"circle/service"
 
 	"github.com/gin-gonic/gin"
 )
-func CreateCircle(c *gin.Context) {
-    name:=c.PostForm("name")
-    discription:=c.PostForm("discription")
-    Imageurl:=c.PostForm("imageurl")
-    usename:=Username(c.GetHeader("Authorization"))
-    userid,_:=dao.GetIdByUser(usename)
-    circle:=models.Circle{
-        Name:name,
-        Discription:discription,
-        Imageurl:Imageurl,
-        Userid:userid,
-        Status:"pending",
+type CircleControllers struct {
+	us *service.CircleServices
+}
+func NewCircleControllers(us *service.CircleServices) *CircleControllers {
+	return &CircleControllers{
+		us: us,
+	}
+}
+func (uc *CircleControllers) CreateCircle(c *gin.Context) {
+    var get request.CreateCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+    name,_:=c.Get("username")
+	n,_:=name.(string)
+    message:=uc.us.CreateCircle(n,get)
+    c.JSON(200, gin.H{"message":message})
+}
+func (uc *CircleControllers) PendingCircle(c *gin.Context){
+    name,_:=c.Get("username")
+	n,_:=name.(string)
+    circle,ok:=uc.us.PendingCircle(n)
+    if !ok {
+        c.JSON(400,gin.H{"error":"权限不足"})
     }
-    _=dao.CreateCircle(&circle)
-    views.Success(c,"等待审核")
+    c.JSON(200,gin.H{"circle":circle})
 }
-func PendingCircle(c *gin.Context){
-    token:=c.GetHeader("Authorization")
-    name:=Username(token)
-    if name!="root" {
-        views.Fail(c,"权限不足")
-        return
-    }
-    circle,_:=dao.SelectPendingCircle()
-    views.ShowCircle(c,circle)
+func (uc *CircleControllers) ApproveCircle(c *gin.Context){
+    name,_:=c.Get("username")
+	n,_:=name.(string)
+    var get request.ApproveCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+    message:=uc.us.ApproveCircle(n,get)
+    c.JSON(200,gin.H{"message":message})
 }
-func ApproveCircle(c *gin.Context){
-    token:=c.GetHeader("Authorization")
-    name:=Username(token)
-    if name!="root" {
-        views.Fail(c,"权限不足")
-        return
-    }
-    circleid:=c.PostForm("circleid")
-    decide:=c.PostForm("decide")
-    id,_:=strconv.Atoi(circleid)
-    circle,_:=dao.GetCircleByID(id)
-    if decide=="false" {
-        _=dao.DeleteCircleByID(id)
-    }else {
-        circle.Status="approved"
-        _=dao.UpdateCircle(&circle,id)
-    }
-    views.Success(c,"审核结束")
+func (uc *CircleControllers) GetCircle(c *gin.Context){
+    var get request.Circleid
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+    circle:=uc.us.GetCircle(get)
+    c.JSON(200,gin.H{"circle":circle})
 }
-func GetCircle(c *gin.Context){
-    circleid:=c.PostForm("circleid")
-    id,_:=strconv.Atoi(circleid)
-    circle,_:=dao.GetCircleByID(id)
-    views.ShowCircle(c,circle)
+func (uc *CircleControllers) SelectCircle(c *gin.Context){
+    circle:=uc.us.SelectCircle()
+    c.JSON(200,gin.H{"circle":circle})
 }
-func SelectCircle(c *gin.Context){
-    circle,_:=dao.SelectCircle()
-    views.ShowManyCircle(c,circle)
-}
-func FollowCircle(c *gin.Context){
-    circleid:=c.PostForm("circleid")
-    cir,_:=strconv.Atoi(circleid)
-    token:=c.GetHeader("Authorization")
-    name:=Username(token)
-    id,_:=dao.GetIdByUser(name)
-    _=dao.FollowCircle(cir,id)
-    views.Success(c,"关注成功")
+func (uc *CircleControllers) FollowCircle(c *gin.Context){
+    var get request.Circleid
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+    name,_:=c.Get("username")
+	n,_:=name.(string)
+    message:=uc.us.FollowCircle(n,get)
+    c.JSON(200,gin.H{"message":message})
 }
