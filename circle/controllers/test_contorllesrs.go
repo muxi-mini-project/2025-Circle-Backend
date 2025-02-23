@@ -1,154 +1,177 @@
 package controllers
 
 import (
-	"circle/database"
-	"circle/models"
-	"circle/views"
-	"strconv"
-	"strings"
+	"circle/request"
+	"circle/service"
 
 	"github.com/gin-gonic/gin"
 )
-func timetosecond(t string) int {
-	parts := strings.Split(t, ":")
-	h, _ := strconv.Atoi(parts[0])
-	m, _ := strconv.Atoi(parts[1])
-	s, _ := strconv.Atoi(parts[2])
-	return h*60*60+m*60+s
+type TestControllers struct {
+	us *service.TestServices
 }
-func Createtest(c *gin.Context){
-	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	discription:=c.PostForm("discription")
-	circle:=c.PostForm("circle")
-	test:=models.Test{
-		Name:name,
-		Discription:discription,
-		Circle:circle,
-		Good:0,
-		Allcomment: 0,
-		Status:"pending", //待审核
+func NewTestControllers(us *service.TestServices) *TestControllers {
+	return &TestControllers{
+		us: us,
 	}
-	database.DB.Create(&test)
-	id:=test.Testid
-	views.Showid(c,id)
 }
-func Createquestion(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	content:=c.PostForm("content")
-	difficulty:=c.PostForm("difficulty")
-	answer:=c.PostForm("answer")
-	variety:=c.PostForm("variety")
-	imageurl:=c.PostForm("imageurl")
-	question:=models.TestQuestion{
-		Content:content,
-		Testid:p,
-		Difficulty: difficulty,
-		Answer: answer,
-		Variety: variety,
-		Imageurl: imageurl,
+func (uc *TestControllers) Createtest(c *gin.Context) {
+	var get request.Test
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
 	}
-	database.DB.Create(&question)
-	id:=question.Questionid
-	views.Showid(c,id)
-}
-func Createtestoption(c *gin.Context){
-    practiceid:=c.PostForm("practiceid")
-	p,_:=strconv.Atoi(practiceid)
-	content:=c.PostForm("content")
-	option:=c.PostForm("option")
-	options:=models.TestOption{
-		Content:content,
-		Practiceid:p,
-		Option:option,
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	id:= uc.us.CreateTest(n, get)
+	if id==-1 {
+		c.JSON(400, gin.H{"error": "创建测试失败"})
+		return
 	}
-	database.DB.Create(&options)
-	views.Success(c,"等待审核")
+	c.JSON(200, gin.H{
+		"id": id,
+	    "message": "等待审核",
+	})
 }
-func Gettest(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	var test models.Test
-	database.DB.Where("testid = ?",p).First(&test)
-	var user models.User
-	database.DB.Where("name = ?",test.Name).First(&user)
-	testhistory:=models.Testhistory{
-		Testid:p,
-		Userid:user.Id,
+func (uc *TestControllers) Createquestion(c *gin.Context) {
+	var get request.TestQuestion
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
 	}
-	database.DB.Create(&testhistory)
-	views.Showtest(c,test)
-}
-func Getquestion(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-    var practices []models.TestQuestion
-	database.DB.Where("testid = ?",p).Find(&practices)
-	views.Showtestquestion(c,practices)
-}
-func Gettestoption(c *gin.Context){
-    practiceid:=c.PostForm("practiceid")
-	p,_:=strconv.Atoi(practiceid)
-	var options []models.TestOption
-	database.DB.Where("practiceid = ?",p).Find(&options)
-	views.Showtestoption(c,options)
-}
-func Getscore(c *gin.Context){
-	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?",name).First(&user)
-	testid:=c.PostForm("testid")
-	time:=c.PostForm("time")  //h.m.s
-	second:=timetosecond(time)
-	n:=c.PostForm("correctnum")
-	correctnum,_:=strconv.Atoi(n)	
-	t,_:=strconv.Atoi(testid)
-	feedback:=c.PostForm("feedback")
-	var test models.Test
-	database.DB.Where("testid = ?",testid).First(&test)
-	test.Allcomment+=1
-	if feedback=="good"{
-		test.Good+=1
+	id:= uc.us.Createquestion(get)
+	if id==-1 {
+		c.JSON(400, gin.H{"error": "创建测试题目失败"})
+		return
 	}
-	database.DB.Save(&test)
-    top:=models.Top{
-		Userid:user.Id,
-		Correctnum:correctnum,
-		Time:time,
-		Second:second,
-		Testid:t,
+	c.JSON(200, gin.H{
+		"id": id,
+		"success": "等待审核",
+	})
+}
+func (uc *TestControllers) Createtestoption(c *gin.Context) {
+	var get request.Option
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
 	}
-	database.DB.Create(&top)
-	views.Success(c,"成功")
-}
-func Showtop(c *gin.Context){
-	testid:=c.PostForm("testid")
-	var tops []models.Top
-	database.DB.Order("correctnum desc , second asc").Where("testid=?",testid).Limit(10).Find(&tops)
-	views.Showtop(c,tops)
-}
-func Commenttest(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	content:=c.PostForm("content")
-	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?",name).Find(&user)
-	comment:=models.TestComment{
-		Content:content,
-		Testid:p,
-		Userid:user.Id,
+	id:= uc.us.Createtestoption(get)
+	if id==-1 {
+		c.JSON(400, gin.H{"error": "创建测试题目失败"})
+		return
 	}
-	database.DB.Create(&comment)
-	views.Success(c,"评论成功")
+	c.JSON(200, gin.H{
+		"id": id,
+		"success": "等待审核",
+	})
 }
-func GettestComment(c *gin.Context){
-	testid:=c.PostForm("testid")
-	p,_:=strconv.Atoi(testid)
-	var comments []models.TestComment
-	database.DB.Where("testid = ?",p).Find(&comments)
-	views.Showtestcomment(c,comments)
+func (uc *TestControllers) Gettest(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	test:= uc.us.Gettest(n, get)
+	c.JSON(200, gin.H{"test": test})
+}
+func (uc *TestControllers) Getquestion(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	question:= uc.us.Getquestion(get)
+	c.JSON(200, gin.H{"question": question})
+}
+func (uc *TestControllers) Gettestoption(c *gin.Context) {
+	var get request.GetPractice
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	option:= uc.us.Gettestoption(get)
+	c.JSON(200, gin.H{"option": option})
+}
+func (uc *TestControllers) Getscore(c *gin.Context) {
+	var get request.Score
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message:= uc.us.Getscore(n, get)
+	c.JSON(200, gin.H{"message": message})
+}
+func (uc *TestControllers) Showtop(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	top:= uc.us.Showtop(get)
+	c.JSON(200, gin.H{"top": top})
+}
+func (uc *TestControllers) Commenttest(c *gin.Context) {
+	var get request.Commenttest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message:= uc.us.Commenttest(n, get)
+	c.JSON(200, gin.H{"message": message})
+}
+func (uc *TestControllers) GettestComment(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	comment:= uc.us.Gettestcomment(get)
+	c.JSON(200, gin.H{"comment": comment})
+}
+func (uc *TestControllers) Lovetest(c *gin.Context) {
+	var get request.Gettest
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	message:= uc.us.Lovetest(get)
+	c.JSON(200, gin.H{"message": message})
+}
+func (uc *TestControllers) RecommentTest(c *gin.Context) {
+	var get request.GetCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	test:=uc.us.RecommentTest(get)
+	c.JSON(200, gin.H{"test": test})
+}
+func (uc *TestControllers) HotTest(c *gin.Context) {
+	var get request.GetCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	test:=uc.us.HotTest(get)
+	c.JSON(200, gin.H{"test": test})
+}
+func (uc *TestControllers) NewTest(c *gin.Context) {
+	var get request.GetCircle
+	if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	test:=uc.us.NewTest(get)
+	c.JSON(200, gin.H{"test": test})
+}
+func (uc *TestControllers) FollowCircleTest(c *gin.Context) {
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	test:=uc.us.FollowCircleTest(n)
+	c.JSON(200, gin.H{"test": test})
 }

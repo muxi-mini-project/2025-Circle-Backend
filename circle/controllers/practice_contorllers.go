@@ -1,111 +1,122 @@
 package controllers
 
 import (
-	"circle/database"
-	"circle/models"
-	"circle/views"
-	"strconv"
+	"circle/request"
+	"circle/service"
 
 	"github.com/gin-gonic/gin"
 )
-func Createpractice(c *gin.Context){
-    variety:=c.PostForm("variety")
-	difficulty:=c.PostForm("difficulty")
-	circle:=c.PostForm("circle")
-	imageurl:=c.PostForm("imageurl")
-	content:=c.PostForm("content")
-	answer:=c.PostForm("answer")
-	name:=c.PostForm("name")
-	if name==""{
-	    token := c.GetHeader("Authorization")
-	    name=Username(token)
+type PracticeControllers struct {
+	us *service.PracticeServices
+}
+func NewPracticeControllers(us *service.PracticeServices) *PracticeControllers {
+	return &PracticeControllers{
+		us: us,
 	}
-    pracitce:=models.Practice{
-		Name:name,
-		Content:content,
-		Difficulty:difficulty,
-		Circle:circle,
-		Answer:answer,
-		Variety:variety,
-		Imageurl:imageurl,
-		Status:"pending", //待审核
+}
+func (uc *PracticeControllers) Createpractice(c *gin.Context) {
+	var practice request.Practice
+	if err := c.ShouldBindJSON(&practice); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
 	}
-	database.DB.Create(&pracitce)
-	id:=pracitce.Practiceid
-	views.Showid(c,id)
-}
-func Createoption(c *gin.Context){
-	practiceid:=c.PostForm("practiceid")
-	p,_:=strconv.Atoi(practiceid)
-	content:=c.PostForm("content")
-	option:=c.PostForm("option")
-	options:=models.PracticeOption{
-		Content:content,
-		Practiceid:p,
-		Option:option,
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	id:=uc.us.Createpractice(n,practice)
+	if id==-1 {
+		c.JSON(400, gin.H{"error": "创建失败"})
 	}
-	database.DB.Create(&options)
-	views.Success(c,"等待审核")
+	c.JSON(200, gin.H{
+		"practiceid": id,
+		"success":"等待审核",
+	})
 }
-func Getpractice(c *gin.Context){
-	circle:=c.PostForm("circle")
-    var practices models.Practice
-	database.DB.Where("status = ?", "approved").Where("circle = ?",circle).Order("RAND()").First(&practices)
-	views.Showpractice(c,practices)
-}
-func Getoption(c *gin.Context){
-    practiceid:=c.PostForm("practiceid")
-	var options []models.PracticeOption
-	database.DB.Where("practiceid = ?",practiceid).Find(&options)
-	views.Showoptions(c,options)
-}
-func Commentpractice(c *gin.Context){
-	practiceid:=c.PostForm("practiceid")
-	p,_:=strconv.Atoi(practiceid)
-	content:=c.PostForm("content")
-	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	comment:=models.PracticeComment{
-		Content:content,
-		Practiceid:p,
-		Name:name,
+func (uc *PracticeControllers) Createoption(c *gin.Context) {
+	var option request.Option
+	if err := c.ShouldBindJSON(&option); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
 	}
-	database.DB.Create(&comment)
-	views.Success(c,"评论成功")
+	message:=uc.us.Createoption(option)
+	c.JSON(200, gin.H{"message":message})
 }
-func GetComment(c *gin.Context){
-	practiceid:=c.PostForm("practiceid")
-	p,_:=strconv.Atoi(practiceid)
-	var comments []models.PracticeComment
-	database.DB.Where("practiceid = ?",p).Find(&comments)
-	views.Showcomment(c,comments)
-}
-func Checkanswer(c *gin.Context){
-	practiceid:=c.PostForm("practiceid")
-	answer:=c.PostForm("answer")
-	p,_:=strconv.Atoi(practiceid)
-	token := c.GetHeader("Authorization")
-	name:=Username(token)
-	var user models.User
-	database.DB.Where("name = ?",name).Find(&user)
-	var userpractice models.UserPractice
-	database.DB.Where("userid = ?",user.Id).First(&userpractice)
-	userpractice.Practicenum=userpractice.Practicenum+1
-	if answer=="true" {
-		userpractice.Correctnum=userpractice.Correctnum+1
+func (uc *PracticeControllers) Getpractice(c *gin.Context) {
+	var getpractice request.GetPractice
+    if err := c.ShouldBindJSON(&getpractice); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
 	}
-	database.DB.Save(&userpractice)
-	practicehistory := models.Practicehistory{
-		Practiceid:p,
-		Userid:user.Id,
-		Answer:answer,
-	}
-	database.DB.Create(&practicehistory)
-	views.Success(c,"回答成功")
+    pracctice:= uc.us.GetPractice(getpractice)
+	c.JSON(200, gin.H{"practice": pracctice})
 }
-func Selectpractice(c *gin.Context){
-	circle:=c.PostForm("circle")
-	var practices []models.Practice
-	database.DB.Where("status = ?", "approved").Where("circle = ?",circle).Limit(5).Find(&practices)
-	views.Selectpractice(c,practices)
+func (uc *PracticeControllers) Getoption(c *gin.Context) {
+	var getpractice request.GetPractice
+    if err := c.ShouldBindJSON(&getpractice); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	option:= uc.us.GetPracticeOption(getpractice)
+	c.JSON(200, gin.H{"option": option})
+}
+func (uc *PracticeControllers) Commentpractice(c *gin.Context) {
+	var get request.Comment
+    if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+    message:=uc.us.CommentPractice(n, get)
+	c.JSON(200, gin.H{"message":message})
+}
+func (uc *PracticeControllers) GetComment(c *gin.Context) {
+	var getpractice request.GetPractice
+    if err := c.ShouldBindJSON(&getpractice); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+    comment:= uc.us.GetComment(getpractice)
+	c.JSON(200, gin.H{"comment": comment})
+}
+func (uc *PracticeControllers) Checkanswer(c *gin.Context) {
+	var get request.CheckAnswer
+    if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message:=uc.us.CheckAnswer(n, get)
+	c.JSON(200, gin.H{"message":message})
+}
+func (uc *PracticeControllers) Getrank(c *gin.Context) {
+	var get request.GetPractice
+    if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	message:=uc.us.Getrank(n, get)
+    c.JSON(200, gin.H{"message":message})
+} 
+func (uc *PracticeControllers) GetUserPractice(c *gin.Context) {
+	var get request.GetPractice
+    if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	name,_:=c.Get("username")
+	n,_:=name.(string)
+	practice:=uc.us.GetUserPractice(n, get)
+	c.JSON(200, gin.H{"userpractice": practice})
+}
+func (uc *PracticeControllers) Lovepractice(c *gin.Context) {
+	var get request.GetPractice
+    if err := c.ShouldBindJSON(&get); err != nil {
+		c.JSON(400, gin.H{"error": "无效的参数"})
+		return
+	}
+	message:=uc.us.Lovepractice(get)
+	c.JSON(200, gin.H{"message":message})
 }

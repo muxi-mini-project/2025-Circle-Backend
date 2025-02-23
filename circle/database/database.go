@@ -5,6 +5,8 @@ import (
 	"time"
 	"circle/models"
 	"io/ioutil"
+	"encoding/json"
+	"fmt"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -12,20 +14,26 @@ import (
 )
 
 var DB *gorm.DB // 必须大写表示公开
+type Config struct {
+	DatabaseDSN string `json:"database_dsn"`
+}
 
 func InitDB() {
 	var err error
 
 	// 配置 MySQL 连接字符串
-	data, _ := ioutil.ReadFile("data.txt")
-	dns:=string(data)
-	dsn := dns+"?parseTime=true&charset=utf8mb4&loc=Local"
+	data, _ := ioutil.ReadFile("data.json")
+	var config Config
+	_ = json.Unmarshal(data, &config)
+	dsn := config.DatabaseDSN
+	fmt.Println("数据库连接字符串: ", dsn)
 
 	// 初始化 GORM 数据库实例
 	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info), // 设置日志级别
 	})
 	if err != nil {
+		
 		log.Fatalf("数据库连接失败: %v", err)
 	}
 
@@ -58,6 +66,9 @@ func InitDB() {
 		&models.TestQuestion{},
 		&models.Testhistory{},
 		&models.Top{},
+		&models.Circle{},
+		&models.FollowCircle{},
+		&models.SearchHistory{},
 	); err != nil {
 		log.Fatalf("自动迁移失败: %v", err)
 	}

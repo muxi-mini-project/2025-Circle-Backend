@@ -7,8 +7,3 @@ type User struct {
 	Imageurl string
 	Discription string `gorm:"type:text"`
 }
-type UserPractice struct {
-    Userid int `gorm:"primaryKey"`  //有主键位才有save,可更新可插入
-    Practicenum int
-	Correctnum int
-}

@@ -2,11 +2,11 @@ package models
 import "time"
 type Test struct {
     Testid int `gorm:"primaryKey;autoIncrement"`	
-	Name string
+	Testname string
+	Userid int
 	Discription string
 	Circle string
 	Good int
-	Allcomment int	
 	Status string
 	Createtime time.Time `gorm:"autoCreateTime"`
 }
@@ -18,6 +18,7 @@ type TestQuestion struct {
 	Answer string
 	Variety string
 	Imageurl string
+	Explain string `gorm:"type:text"`
 }
 type TestOption struct {
 	Optionid int `gorm:"primaryKey;autoIncrement"`
@@ -29,8 +30,7 @@ type Top struct {
 	Topid int `gorm:"primaryKey;autoIncrement"`
 	Userid int
 	Correctnum int
-	Time string
-	Second int
+	Time int
 	Testid int
 }
 type TestComment struct {
